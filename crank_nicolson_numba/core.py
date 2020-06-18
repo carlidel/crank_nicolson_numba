@@ -1,5 +1,6 @@
 import numpy as np
-from numba import jitclass, njit # import the decorator
+from numba.experimental import jitclass
+from numba import njit # import the decorator
 from numba import prange # import the prange
 from numba import int32, double, boolean # import the types
 

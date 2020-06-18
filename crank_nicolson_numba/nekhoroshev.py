@@ -134,7 +134,10 @@ def linear_distribution(I_linspace, max_value, stopping=-1.0):
     numpy array
         the linear distribution
     """
-    index = np.argmax(I_linspace >= stopping)
+    if stopping == -1.0:
+        index = len(I_linspace)
+    else:
+        index = np.argmax(I_linspace >= stopping)
     return np.concatenate((np.linspace(max_value, 0.0, index), np.zeros(len(I_linspace) - index)))
 
 
@@ -289,11 +292,14 @@ class cn_nekhoroshev(object):
         float
             diffusion coefficient
         """
-        return(
+        mask = (x != 0.0)
+        result = np.zeros_like(x)
+        result[mask] = (
             0.5 * self.c
-            * np.power(x, self.beta)
-            * np.exp(- 2 * np.power(self.I_star / x, self.alpha))
+            * np.power(x[mask], self.beta)
+            * np.exp(- 2 * np.power(self.I_star / x[mask], self.alpha))
         )
+        return result
 
     def extend(self, I_max):
         """Extends the size of the simulation and moves forward the absorbing
