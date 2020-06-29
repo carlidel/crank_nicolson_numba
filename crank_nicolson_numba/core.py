@@ -33,6 +33,7 @@ spec = [
     ('left_extreme', double),
     ('right_extreme', double),
     ('executed_iterations', int32),
+    ('sanity_flag', boolean)
 ]
 
 @jitclass(spec)
@@ -49,6 +50,8 @@ class crank_nicolson(object):
         self.is_there_source = False
         self.lock_left = False
         self.lock_right = False
+
+        self.sanity_flag = True
 
         assert(X0.size == N)
         assert(A.size == 0 or A.size == N * 2)
@@ -193,6 +196,7 @@ class crank_nicolson(object):
     def reset(self):
         self.x = self.x0
         self.executed_iterations = 0
+        self.sanity_flag = True
 
     def iterate(self, n_iterations):
         for i in range(n_iterations):
@@ -202,6 +206,8 @@ class crank_nicolson(object):
             self.tridiagonal_solver()
             if self.is_there_source:
                 self.apply_source()
+        if np.any(self.x < 0):
+            self.sanity_flag = False
 
     # SETTERS
 

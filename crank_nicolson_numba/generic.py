@@ -232,7 +232,7 @@ class cn_generic(object):
             self.I0 /= integrate.trapz(self.I0, x=self.I)
 
         self.engine = crank_nicolson(
-            self.samples, I_min, I_max, self.dt, self.I0, A, B, C, D)
+            self.samples, I_min, I_max, self.dt, self.I0.copy(), A, B, C, D)
 
     def set_source(self, source):
         """Apply a source vector to the simulation, this will overwrite all non zero values over the simulation distribution at each iteration.
@@ -287,6 +287,16 @@ class cn_generic(object):
         """Resets the simulation to the starting condition.
         """
         self.engine.reset()
+
+    def get_sanity(self):
+        """Get sanity check flag
+        
+        Returns
+        -------
+        boolean
+            sanity check flag
+        """
+        return self.engine.sanity_flag
 
     def get_data(self):
         """Get raw distribution data.
