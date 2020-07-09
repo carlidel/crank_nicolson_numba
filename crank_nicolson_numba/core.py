@@ -1,5 +1,9 @@
 import numpy as np
-from numba.experimental import jitclass
+try:
+    from numba.experimental import jitclass
+except ImportError:
+    # this is an older version of Numba
+    from numba import jitclass
 from numba import njit # import the decorator
 from numba import prange # import the prange
 from numba import int32, double, boolean # import the types
