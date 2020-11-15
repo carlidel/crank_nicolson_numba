@@ -30,7 +30,7 @@ def logistic_damping(I_linspace, I0, damping_point, lenght):
 
 
 class cn_polynomial(object):
-    def __init__(self, I_max, c, exponent, I0, dt, normalize=True, I_min=0.0):
+    def __init__(self, I_max, c, exponent, I0, dt, normalize=True, I_min=0.0, I_star=1.0):
         self.I_max = I_max
         self.I_min = I_min
         self.c = c
@@ -41,6 +41,7 @@ class cn_polynomial(object):
         self.samples = len(I0)
 
         self.I = np.linspace(I_min, I_max, self.samples)
+        self.I_star = I_star
         self.dI = np.absolute(self.I[1] - self.I[0])
         self.half_dI = self.dI * 0.5
 
@@ -49,16 +50,16 @@ class cn_polynomial(object):
 
         A = []
         for i in self.I:
-            A.append(self.poly_D(i - self.half_dI)) if \
+            A.append(self.poly_D(i - self.half_dI, I_star)) if \
                 (i - self.half_dI > 0) else A.append(0.0)
-            A.append(self.poly_D(i + self.half_dI))
+            A.append(self.poly_D(i + self.half_dI, I_star))
         A = np.array(A)
         B = np.zeros(self.samples)
         C = np.zeros(self.samples)
         D = np.zeros(self.samples + 2)
 
         # For Reference:
-        self.diffusion = self.poly_D(self.I)
+        self.diffusion = self.poly_D(self.I, I_star)
 
         # Normalize?
         if normalize:
@@ -67,8 +68,8 @@ class cn_polynomial(object):
         self.engine = crank_nicolson(
             self.samples, I_min, I_max, self.dt, self.I0.copy(), A, B, C, D)
 
-    def poly_D(self, I):
-        return self.c * np.power(I, self.exponent)
+    def poly_D(self, I, I_star=1.0):
+        return self.c * np.power(I / I_star, self.exponent)
 
     def set_source(self, source):
         """Apply a source vector to the simulation, this will overwrite all non zero values over the simulation distribution at each iteration.
@@ -132,9 +133,9 @@ class cn_polynomial(object):
         data = np.append(np.array(self.engine.x), np.zeros(increasing))
         A = []
         for i in self.I:
-            A.append(self.poly_D(i - self.half_dI)) if (i -
+            A.append(self.poly_D(i - self.half_dI, self.I_star)) if (i -
                                                        self.half_dI > 0) else A.append(0.0)
-            A.append(self.poly_D(i + self.half_dI))
+            A.append(self.poly_D(i + self.half_dI, self.I_star))
         A = np.array(A)
         B = np.zeros(self.samples)
         C = np.zeros(self.samples)
@@ -150,7 +151,7 @@ class cn_polynomial(object):
 
         self.engine.set_executed_iterations(N)
 
-        self.diffusion = self.poly_D(self.I)
+        self.diffusion = self.poly_D(self.I, self.I_star)
 
     def cut(self, damping_point, length, I_max=-1.0):
         """Executes a damping of the distribution and, if required, reduces
@@ -188,9 +189,9 @@ class cn_polynomial(object):
         # Let's make everything again
         A = []
         for i in self.I:
-            A.append(self.poly_D(i - self.half_dI)) if (i -
+            A.append(self.poly_D(i - self.half_dI, self.I_star)) if (i -
                                                        self.half_dI > 0) else A.append(0.0)
-            A.append(self.poly_D(i + self.half_dI))
+            A.append(self.poly_D(i + self.half_dI, self.I_star))
         A = np.array(A)
         B = np.zeros(self.samples)
         C = np.zeros(self.samples)
@@ -206,7 +207,7 @@ class cn_polynomial(object):
 
         self.engine.set_executed_iterations(N)
 
-        self.diffusion = self.poly_D(self.I)
+        self.diffusion = self.poly_D(self.I, self.I_star)
 
     def change_dt(self, new_dt):
         """Change the dt of the integrator.
@@ -221,9 +222,9 @@ class cn_polynomial(object):
 
         A = []
         for i in self.I:
-            A.append(self.poly_D(i - self.half_dI)) if (i -
+            A.append(self.poly_D(i - self.half_dI, self.I_star)) if (i -
                                                        self.half_dI > 0) else A.append(0.0)
-            A.append(self.poly_D(i + self.half_dI))
+            A.append(self.poly_D(i + self.half_dI, self.I_star))
         A = np.array(A)
         B = np.zeros(self.samples)
         C = np.zeros(self.samples)
