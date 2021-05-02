@@ -308,7 +308,7 @@ class cn_generic(object):
         """
         return np.array(self.engine.x)
 
-    def get_plot_data(self):
+    def get_data_with_x(self):
         """Get raw distribution data and corrispective I_linspace
         
         Returns
@@ -364,6 +364,6 @@ class cn_generic(object):
         for i in tqdm(range(samples), disable=disable_tqdm):
             self.engine.iterate(it_per_sample)
             temp2 = self.get_sum()
-            current_array[i] = (temp1 - temp2) / self.dt
+            current_array[i] = (temp1 - temp2) / (self.dt * it_per_sample)
             temp1 = temp2
         return times, current_array
