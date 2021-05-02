@@ -4,7 +4,7 @@ import sys
 import setuptools
 import glob
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 setup(
     name='crank_nicolson_numba',
