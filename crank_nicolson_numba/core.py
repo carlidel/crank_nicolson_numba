@@ -103,12 +103,12 @@ class crank_nicolson(object):
 
         self.source = np.empty(self.N, dtype=double)
         
-        self.make_left_hand_matrix()
-        self.make_right_hand_matrix()
-        self.make_c_prime()
+        self.__make_left_hand_matrix()
+        self.__make_right_hand_matrix()
+        self.__make_c_prime()
 
-    def make_left_hand_matrix(self):
-        for i in prange(self.N):
+    def __make_left_hand_matrix(self):
+        for i in range(self.N):
             self.a_left[i] = (
                 + self.B[i] / (4 * self.DX)
                 - self.A[i * 2] / (2 * self.DX * self.DX)
@@ -127,8 +127,8 @@ class crank_nicolson(object):
                 + self.D[i + 1] / (self.DX * self.DX)
             )
 
-    def make_right_hand_matrix(self):
-        for i in prange(self.N):
+    def __make_right_hand_matrix(self):
+        for i in range(self.N):
             self.a_right[i] = (
                 - self.B[i] / (4 * self.DX)
                 + self.A[i * 2] / (2 * self.DX * self.DX)
@@ -147,12 +147,12 @@ class crank_nicolson(object):
                 - self.D[i + 1] / (self.DX * self.DX)
             )
 
-    def make_c_prime(self):
+    def __make_c_prime(self):
         self.c_prime[0] = self.c_left[0] / self.b_left[0]
         for i in range(1, self.N - 1):
             self.c_prime[i] = self.c_left[i] / (self.b_left[i] - self.a_left[i] * self.c_prime[i - 1])
 
-    def dot_product_tridiagonal(self):
+    def __dot_product_tridiagonal(self):
         self.temp[0] = (
             + self.b_right[0] * self.f[0]
             + self.c_right[0] * self.f[1]
@@ -162,7 +162,7 @@ class crank_nicolson(object):
             + self.b_right[self.N - 1] * self.f[self.N - 1]
         )
 
-        for i in prange(1, self.N - 1):
+        for i in range(1, self.N - 1):
             self.temp[i] = (
                 + self.a_right[i] * self.f[i - 1]
                 + self.b_right[i] * self.f[i]
@@ -177,9 +177,9 @@ class crank_nicolson(object):
 
         self.f = self.temp.copy()
 
-    def tridiagonal_solver(self):
+    def __tridiagonal_solver(self):
         self.f_prime[0] = self.f[0] / self.b_left[0]
-        for i in prange(1, self.N):
+        for i in range(1, self.N):
             self.f_prime[i] = (
                 (self.f[i] - self.a_left[i] * self.f_prime[i - 1])
                 / (self.b_left[i] - self.a_left[i] * self.c_prime[i - 1])
@@ -190,8 +190,8 @@ class crank_nicolson(object):
         for i in range(self.N - 2, -1, -1):
             self.x[i] = self.f_prime[i] - self.c_prime[i] * self.x[i + 1]
 
-    def apply_source(self):
-        for i in prange(self.N):
+    def __apply_source(self):
+        for i in range(self.N):
             if self.source[i] >= 0.0:
                 self.x[i] = self.source[i]
 
@@ -206,10 +206,10 @@ class crank_nicolson(object):
         for i in range(n_iterations):
             self.executed_iterations += 1
             self.f, self.x = self.x, self.f
-            self.dot_product_tridiagonal()
-            self.tridiagonal_solver()
+            self.__dot_product_tridiagonal()
+            self.__tridiagonal_solver()
             if self.is_there_source:
-                self.apply_source()
+                self.__apply_source()
         if np.any(self.x < 0):
             self.sanity_flag = False
 
