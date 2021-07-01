@@ -210,15 +210,15 @@ class cn_generic(object):
         self.samples = I0.size
         self.half_dI = self.dI * 0.5
 
-        A = []
+        self.A = []
         for i in self.I:
-            A.append(self.D_lambda(i - self.half_dI)) if (i -
-                                                          self.half_dI > 0) else A.append(0.0)
-            A.append(self.D_lambda(i + self.half_dI))
-        A = np.array(A)
-        B = np.zeros(self.samples)
-        C = np.zeros(self.samples)
-        D = np.zeros(self.samples + 2)
+            self.A.append(self.D_lambda(i - self.half_dI)) if (i -
+                                                               self.half_dI > 0) else self.A.append(0.0)
+            self.A.append(self.D_lambda(i + self.half_dI))
+        self.A = np.array(self.A)
+        self.B = np.zeros(self.samples)
+        self.C = np.zeros(self.samples)
+        self.D = np.zeros(self.samples + 2)
 
         self.locked_left = False
         self.locked_right = False
@@ -231,11 +231,21 @@ class cn_generic(object):
             self.I0 /= integrate.trapz(self.I0, x=self.I)
 
         self.engine = crank_nicolson(
-            self.samples, I_min, I_max, self.dt, self.I0.copy(), A, B, C, D)
+            self.samples, I_min, I_max, self.dt, self.I0.copy(), self.A, self.B, self.C, self.D)
+
+    def rescale_time(self, scale):
+        self.dt *= scale
+        I = self.get_data()
+        self.engine = crank_nicolson(
+            self.samples, self.I_min, self.I_max, self.dt, I.copy(), self.A, self.B, self.C, self.D)
+        if self.locked_left:
+            self.lock_left()
+        if self.locked_right:
+            self.lock_right()
 
     def move_barrier_forward(self, movement):
         assert movement > 0
-
+        executed_iterations = self.engine.executed_iterations
         movement += self.dI
         plug = np.arange(self.I_max, self.I_max + movement, self.dI)[1:]
         
@@ -250,29 +260,34 @@ class cn_generic(object):
         
         self.samples = self.I0.size
 
-        A = []
+        self.A = []
         for i in self.I:
-            A.append(
+            self.A.append(
                 self.D_lambda(i - self.half_dI) 
                     if (i - self.half_dI > 0) 
                         else 0.0)
-            A.append(self.D_lambda(i + self.half_dI))
-        A = np.array(A)
-        B = np.zeros(self.samples)
-        C = np.zeros(self.samples)
-        D = np.zeros(self.samples + 2)
-
-        self.locked_left = False
-        self.locked_right = False
+            self.A.append(self.D_lambda(i + self.half_dI))
+        self.A = np.array(self.A)
+        self.B = np.zeros(self.samples)
+        self.C = np.zeros(self.samples)
+        self.D = np.zeros(self.samples + 2)
 
         # For Reference:
         self.diffusion = np.array([self.D_lambda(i) for i in self.I])
 
         self.engine = crank_nicolson(
-            self.samples, self.I_min, self.I_max, self.dt, actual_rho.copy(), A, B, C, D)
+            self.samples, self.I_min, self.I_max, self.dt, actual_rho.copy(), self.A, self.B, self.C, self.D)
+        self.engine.set_executed_iterations(executed_iterations)
+        if self.locked_left:
+            self.lock_left()
+        if self.locked_right:
+            self.lock_right()
 
     def move_barrier_backward(self, movement):
         assert movement > 0
+
+        dist_before_movement = self.get_sum()
+        executed_iterations = self.engine.executed_iterations
 
         index = np.argmin(self.I <= self.I_max - movement)
         assert index > 1
@@ -282,30 +297,36 @@ class cn_generic(object):
         self.samples = self.I.size
 
         self.I0 = self.I0[:index]
-        self.I0 *= 1/(1 + np.exp((self.I - (self.I_max - self.dI * 10))/ (self.dI * 2)))
+        self.I0 *= 1/(1 + np.exp((self.I - (self.I_max - self.dI * 3))/ (self.dI * 2)))
 
         actual_rho = self.get_data()
         actual_rho = actual_rho[:index]
-        actual_rho *= 1/(1 + np.exp((self.I - (self.I_max - self.dI * 10))/ (self.dI * 2)))
+        actual_rho *= 1/(1 + np.exp((self.I - (self.I_max - self.dI * 3))/ (self.dI * 2)))
 
-        A = []
+        self.A = []
         for i in self.I:
-            A.append(self.D_lambda(i - self.half_dI)) if (i -
-                                                          self.half_dI > 0) else A.append(0.0)
-            A.append(self.D_lambda(i + self.half_dI))
-        A = np.array(A)
-        B = np.zeros(self.samples)
-        C = np.zeros(self.samples)
-        D = np.zeros(self.samples + 2)
-
-        self.locked_left = False
-        self.locked_right = False
+            self.A.append(self.D_lambda(i - self.half_dI)) if (i -
+                                                          self.half_dI > 0) else self.A.append(0.0)
+            self.A.append(self.D_lambda(i + self.half_dI))
+        self.A = np.array(self.A)
+        self.B = np.zeros(self.samples)
+        self.C = np.zeros(self.samples)
+        self.D = np.zeros(self.samples + 2)
 
         # For Reference:
         self.diffusion = np.array([self.D_lambda(i) for i in self.I])
 
         self.engine = crank_nicolson(
-            self.samples, self.I_min, self.I_max, self.dt, actual_rho.copy(), A, B, C, D)
+            self.samples, self.I_min, self.I_max, self.dt, actual_rho.copy(), self.A, self.B, self.C, self.D)
+
+        self.engine.set_executed_iterations(executed_iterations)
+        if self.locked_left:
+            self.lock_left()
+        if self.locked_right:
+            self.lock_right()
+        dist_after_movement = self.get_sum()
+
+        return dist_after_movement - dist_before_movement
 
     def set_source(self, source):
         """Apply a source vector to the simulation, this will overwrite all non zero values over the simulation distribution at each iteration.
