@@ -461,3 +461,63 @@ class cn_generic(object):
             current_array[i] = (temp1 - temp2) / (self.dt * it_per_sample)
             temp1 = temp2
         return times, current_array
+
+    def analytical_sample(self):
+        first_derivative = self.engine.x[-1] / (self.dI * 1)
+        diffusion = self.D_lambda(self.I_max)
+        return first_derivative * diffusion
+
+    def analytical_current(self, samples=5000, it_per_sample=20, disable_tqdm=True):
+        """Perform automatic iteration of the simulation 
+        and compute resulting current via analytical formula.
+        
+        Parameters
+        ----------
+        samples : int, optional
+            number of current samples, by default 5000
+        it_per_sample : int, optional
+            number of sim. iterations per current sample, by default 20
+        
+        Returns
+        -------
+        (numpy 1D array, numpy 1D array)
+            (times of the samples, current values for those samples)
+        """
+        current_array = np.empty(samples)
+        times = (np.arange(samples) * it_per_sample +
+                 self.engine.executed_iterations) * self.dt
+        for i in tqdm(range(samples), disable=disable_tqdm):
+            self.engine.iterate(it_per_sample)
+            current_array[i] = self.analytical_sample()
+        return times, current_array
+
+    def double_kind_current(self, samples=5000, it_per_sample=20, disable_tqdm=True):
+        """Perform automatic iteration of the simulation 
+        and compute resulting current via the two formulas we have.
+        
+        Parameters
+        ----------
+        samples : int, optional
+            number of current samples, by default 5000
+        it_per_sample : int, optional
+            number of sim. iterations per current sample, by default 20
+        
+        Returns
+        -------
+        (numpy 1D array, numpy 1D array, numpy 1D array)
+            (times of the samples, current, current_analytic)
+        """
+        current_array = np.empty(samples)
+        current_array_ana = np.empty(samples)
+        temp1 = self.get_sum()
+        times = (np.arange(samples) * it_per_sample +
+                 self.engine.executed_iterations) * self.dt
+        for i in tqdm(range(samples), disable=disable_tqdm):
+            self.engine.iterate(it_per_sample)
+
+            temp2 = self.get_sum()
+            current_array[i] = (temp1 - temp2) / (self.dt * it_per_sample)
+            temp1 = temp2
+
+            current_array_ana[i] = self.analytical_sample()
+        return times, current_array, current_array_ana
