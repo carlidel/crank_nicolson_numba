@@ -210,6 +210,10 @@ class crank_nicolson(object):
             self.__tridiagonal_solver()
             if self.is_there_source:
                 self.__apply_source()
+        if self.lock_left:
+            self.x[0] = self.left_extreme
+        if self.lock_right:
+            self.x[-1] = self.right_extreme
         if np.any(self.x < 0):
             self.sanity_flag = False
 

@@ -2,6 +2,7 @@ import numpy as np
 import scipy as sc
 from tqdm import tqdm
 import scipy.integrate as integrate
+import scipy.interpolate as interpolate
 
 from .core import crank_nicolson
 
@@ -180,7 +181,7 @@ def I_norm_sampling_to_x(mean_I, sigma_I):
 class cn_generic(object):
     """wrapper for generic diffusive process"""
 
-    def __init__(self, I_min, I_max, I0, dt, D_lambda, normalize=True):
+    def __init__(self, I_min, I_max, I0, dt, D_lambda, normalize=False):
         """init the wrapper
         
         Parameters
@@ -206,7 +207,7 @@ class cn_generic(object):
         self.dt = dt
         self.D_lambda = D_lambda
 
-        self.I, self.dI = np.linspace(I_min, I_max, I0.size, retstep=True)
+        self.I, self.dI = np.linspace(I_min, I_max, I0.size, retstep=True, endpoint=False)
         self.samples = I0.size
         self.half_dI = self.dI * 0.5
 
@@ -243,22 +244,33 @@ class cn_generic(object):
         if self.locked_right:
             self.lock_right()
 
-    def move_barrier_forward(self, movement):
+    def move_barrier_forward(self, movement, resample=False):
         assert movement > 0
-        executed_iterations = self.engine.executed_iterations
-        movement += self.dI
-        plug = np.arange(self.I_max, self.I_max + movement, self.dI)[1:]
-        
+    
         actual_rho = self.get_data()
-        actual_rho = np.concatenate((actual_rho, np.zeros(len(plug))))
-        
-        self.I0 = np.concatenate((self.I0, np.zeros(len(plug))))
-        
-        self.I = np.concatenate((self.I, plug))
-        
-        self.I_max = self.I[-1]
-        
-        self.samples = self.I0.size
+        executed_iterations = self.engine.executed_iterations
+
+        if resample:
+            new_imax = self.I_max + movement
+            f = interpolate.interp1d(self.I, actual_rho, kind="cubic")
+            new_i, new_di = np.linspace(self.I_min, new_imax, self.samples, retstep=True, endpoint=False)
+            new_i0 = np.array([
+                f(x) if x <= self.I[-1] else 0.0 for x in new_i
+            ])
+
+            self.I0 = new_i0
+            self.I = new_i
+            self.dI = new_di
+            self.half_dI = self.dI * 0.5
+            self.I_max = new_imax
+
+        else:
+            movement += self.dI
+            plug = np.arange(self.I_max, self.I_max + movement, self.dI)[1:]
+            self.I0 = np.concatenate((actual_rho, np.zeros(len(plug))))
+            self.I = np.concatenate((self.I, plug))
+            self.I_max = self.I[-1]            
+            self.samples = self.I0.size
 
         self.A = []
         for i in self.I:
@@ -276,32 +288,42 @@ class cn_generic(object):
         self.diffusion = np.array([self.D_lambda(i) for i in self.I])
 
         self.engine = crank_nicolson(
-            self.samples, self.I_min, self.I_max, self.dt, actual_rho.copy(), self.A, self.B, self.C, self.D)
+            self.samples, self.I_min, self.I_max, self.dt, self.I0.copy(), self.A, self.B, self.C, self.D)
         self.engine.set_executed_iterations(executed_iterations)
         if self.locked_left:
             self.lock_left()
         if self.locked_right:
             self.lock_right()
 
-    def move_barrier_backward(self, movement):
+    def move_barrier_backward(self, movement, resample=False):
         assert movement > 0
 
+        actual_rho = self.get_data()
         dist_before_movement = self.get_sum()
         executed_iterations = self.engine.executed_iterations
+        
+        if resample:
+            new_imax = self.I_max - movement
+            new_i, new_di = np.linspace(self.I_min, new_imax, self.samples, retstep=True, endpoint=False)
+            f = interpolate.interp1d(self.I, actual_rho, kind="cubic")
+            new_i0 = np.array([
+                f(x) for x in new_i
+            ]) / (1 + np.exp((new_i - (new_imax - new_di * 3)) / (new_di * 2)))
+            self.I0 = new_i0
+            self.I = new_i
+            self.dI = new_di
+            self.half_dI = self.dI * 0.5
+            self.I_max = new_imax
+        else:
+            index = np.argmin(self.I <= self.I_max - movement)
+            assert index > 1
 
-        index = np.argmin(self.I <= self.I_max - movement)
-        assert index > 1
+            self.I = self.I[:index]
+            self.I_max = self.I[-1]
+            self.samples = self.I.size
 
-        self.I = self.I[:index]
-        self.I_max = self.I[-1]
-        self.samples = self.I.size
-
-        self.I0 = self.I0[:index]
-        self.I0 *= 1/(1 + np.exp((self.I - (self.I_max - self.dI * 3))/ (self.dI * 2)))
-
-        actual_rho = self.get_data()
-        actual_rho = actual_rho[:index]
-        actual_rho *= 1/(1 + np.exp((self.I - (self.I_max - self.dI * 3))/ (self.dI * 2)))
+            self.I0 = actual_rho[:index]
+            self.I0 *= 1/(1 + np.exp((self.I - (self.I_max - self.dI * 3))/ (self.dI * 2)))
 
         self.A = []
         for i in self.I:
@@ -315,9 +337,8 @@ class cn_generic(object):
 
         # For Reference:
         self.diffusion = np.array([self.D_lambda(i) for i in self.I])
-
         self.engine = crank_nicolson(
-            self.samples, self.I_min, self.I_max, self.dt, actual_rho.copy(), self.A, self.B, self.C, self.D)
+            self.samples, self.I_min, self.I_max, self.dt, self.I0.copy(), self.A, self.B, self.C, self.D)
 
         self.engine.set_executed_iterations(executed_iterations)
         if self.locked_left:
@@ -463,11 +484,10 @@ class cn_generic(object):
         return times, current_array
 
     def analytical_sample(self):
-        first_derivative = self.engine.x[-1] / (self.dI * 1)
-        diffusion = self.D_lambda(self.I_max)
-        return first_derivative * diffusion
+        first_derivative = (- self.engine.x[-1]) / (self.dI * 1)
+        return first_derivative
 
-    def analytical_current(self, samples=5000, it_per_sample=20, disable_tqdm=True):
+    def analytical_current(self, samples=5000, it_per_sample=20, disable_tqdm=True, the_diffusion_is_halved=True):
         """Perform automatic iteration of the simulation 
         and compute resulting current via analytical formula.
         
@@ -489,9 +509,9 @@ class cn_generic(object):
         for i in tqdm(range(samples), disable=disable_tqdm):
             self.engine.iterate(it_per_sample)
             current_array[i] = self.analytical_sample()
-        return times, current_array
+        return times, - current_array * self.D_lambda(self.I_max) * (2 if the_diffusion_is_halved else 1)
 
-    def double_kind_current(self, samples=5000, it_per_sample=20, disable_tqdm=True):
+    def double_kind_current(self, samples=5000, it_per_sample=20, disable_tqdm=True, the_diffusion_is_halved=True):
         """Perform automatic iteration of the simulation 
         and compute resulting current via the two formulas we have.
         
@@ -520,4 +540,4 @@ class cn_generic(object):
             temp1 = temp2
 
             current_array_ana[i] = self.analytical_sample()
-        return times, current_array, current_array_ana
+        return times, current_array, - current_array_ana * self.D_lambda(self.I_max) * (2 if the_diffusion_is_halved else 1)
